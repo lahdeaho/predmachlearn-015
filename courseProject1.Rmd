@@ -1,0 +1,142 @@
+---
+title: "Practical Machine Learning: Course Project"
+author: "Mikko Lähdeaho"
+date: '2015-06-14'
+output: html_document
+self_contained: no
+keep_md: yes
+---
+
+
+##Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+##Summary
+
+The goal of this project was to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+
+First we needed to download the data and the split it to training and testing sets. We made also some exploratory analysis to find how the data looks and where to start modeling. Classification tree was first attempt and then continued with Random Forest Model which was very accurate (about 99%).
+
+Last thing was to test the model against to testing data and make answer files for project submission.
+
+
+##Data Processing
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+At first we need to download the dataset and process it in R.
+We'll split the training data to 70% training and 30% testing sets.
+
+```{r load data, results = "asis"}
+require(caret)
+
+#Download data
+download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+              destfile = "./pml-training.csv")
+download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+              destfile = "./pml-testing.csv")
+
+#Load data to R
+rawTraining <- read.csv("./pml-training.csv", na.strings=c("NA",""), strip.white=T)
+#rawTesting <- read.csv("./pml-testing.csv", na.strings=c("NA",""), strip.white=T)
+
+##Fix NA's
+isNA <- apply(rawTraining, 2, function(x) { sum(is.na(x)) })
+data <- subset(rawTraining[, which(isNA == 0)], 
+                    select=-c(X, new_window, num_window, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp))
+
+#Make training and test sets
+inTrain <- createDataPartition(data$classe, p=0.7, list=F)
+training <- data[inTrain,]
+testing <- data[-inTrain,]
+```
+
+
+## Exploratory Analysis
+
+At first we like to see some distribution information about the dataset.
+
+###Summary
+
+```{r exploratory analysis, results = "asis"}
+require(knitr)
+set.seed(666)
+
+summary(training)
+```
+
+Please see the distribution plot in Appendix - Figure 1.
+
+
+###Classification Tree
+
+Then we'll try to analyse the traning set with the classification tree.
+
+```{r classification, results = "asis"}
+require(rattle)
+require(rpart.plot)
+
+modelRpart <- train(classe ~., method="rpart",data=training)
+```
+
+Please see the classification tree plot in Appendix - Figure 2.
+
+
+##Random Forest Model
+
+Next we'll train a Random Forest model on the training set.
+
+```{r random forest, results = "asis"}
+require(randomForest)
+
+modelRandomForest <- randomForest(classe~.,data=training)
+modelRandomForest
+```
+
+
+
+##Testing the Model
+
+The Random Forest Model seems to be very accurate on training set. We'll test it against the testing set.  
+
+```{r tests, results = "asis"}
+pred <- predict(modelRandomForest, testing)
+confusionMatrix(testing$classe, pred)
+```
+
+The model is `r sum(pred == testing$classe) / length(pred)` accurate against our testing set.
+Confusion matrix also shows this.
+
+Please see the submission code in Appendix - Code 1. 
+It will show the steps to test the testing data and how to make the answer files.
+
+##Appendix
+
+### Code 1: Submission Script
+```{r code1, fig.height=6, fig.width=10, results = "asis"}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+rawTesting <- read.csv("./pml-testing.csv", na.strings=c("NA",""), strip.white=T)
+predictions <- predict(modelRandomForest, rawTesting)
+
+pml_write_files(predictions)
+```
+
+
+### Figure 1: Count of Users per Classe in Training Set
+```{r figure1, fig.height=6, fig.width=10, results = "asis"}
+require(ggplot2)
+qplot(classe, data=training, fill=user_name)
+```
+
+### Figure 2: Classification Tree of Training Set
+```{r figure2, fig.height=6, fig.width=10, results = "asis"}
+fancyRpartPlot(modelRpart$finalModel, main="Classification Tree")
+```
